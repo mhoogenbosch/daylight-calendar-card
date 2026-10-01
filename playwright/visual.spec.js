@@ -1414,9 +1414,9 @@ test('regression issue 608: month span starting in other-month cell paints acros
   await expect(span).toHaveCount(1);
   await expect(span).toHaveAttribute('data-month-span-days', '6');
 
-  // Keep ordinary leading-month content muted without making the whole cell a stacking context.
-  await expect(leadingDay).toHaveCSS('opacity', '1');
-  await expect(leadingDay.locator('.day-header-row')).toHaveCSS('opacity', '0.5');
+  // Preserve the muted leading-month treatment while elevating only the span's origin cell.
+  await expect(leadingDay).toHaveClass(/month-span-origin/);
+  await expect(leadingDay).toHaveCSS('opacity', '0.5');
   await expect(span).toHaveCSS('opacity', '1');
 
   const paintState = await card.evaluate((element) => {
@@ -1429,18 +1429,20 @@ test('regression issue 608: month span starting in other-month cell paints acros
     const eventRect = event.getBoundingClientRect();
     const firstRect = octoberFirst.getBoundingClientRect();
     const fourthRect = octoberFourth.getBoundingClientRect();
+    const fourthStyle = getComputedStyle(octoberFourth);
+    const fourthContentRight = fourthRect.right - Number.parseFloat(fourthStyle.paddingRight || '0');
     const sampleX = firstRect.left + (firstRect.width / 2);
     const sampleY = eventRect.top + (eventRect.height / 2);
     const topmost = document.elementFromPoint(sampleX, sampleY);
 
     return {
-      reachesFourthDay: eventRect.right >= fourthRect.right - 1,
+      reachesFourthDayContent: eventRect.right >= fourthContentRight - 1,
       paintsOverOctoberFirst: !!topmost && (topmost === event || event.contains(topmost))
     };
   });
 
   expect(paintState).toEqual({
-    reachesFourthDay: true,
+    reachesFourthDayContent: true,
     paintsOverOctoberFirst: true
   });
 });
