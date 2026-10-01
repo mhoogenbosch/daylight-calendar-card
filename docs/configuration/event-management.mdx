@@ -111,6 +111,12 @@ A custom color set from the modal overrides the `background_color` (also known a
   Master switch for all event management features. Set to `false` to make the card completely read-only — the Add Event button is hidden and clicking events opens a read-only detail view with no Edit or Delete actions.
 </ParamField>
 
+<ParamField path="disable_event_creation" default="false" type="boolean">
+  Prevent creation of new events while leaving management of existing events independent. When `true`, the card hides Add Event controls and blocks creation from Month day taps, Agenda day rows, Schedule time slots, Week day headers, and the **Forward** action.
+
+  Existing events can still be viewed, edited, custom-colored, or deleted when those actions are otherwise allowed. This is useful when events should be created by automations or other software but still need to be removable from Daylight.
+</ParamField>
+
 <ParamField path="readonly_calendars" type="list">
   A list of calendar entity IDs that should be treated as read-only even when event management is enabled. Events on these calendars can be viewed but not edited or deleted from the card.
 
@@ -122,7 +128,9 @@ A custom color set from the modal overrides the `background_color` (also known a
 </ParamField>
 
 <ParamField path="hide_add_event_button" default="false" type="boolean">
-  Hide the **Add Event** button from the header. This also hides the contextual **Add Event** button in the `show_events` day-events popup (see [Month view](/views/month)). Users can still edit and delete existing events unless you also disable event management or mark calendars as read-only.
+  Hide the **Add Event** button from the header. This also hides the contextual **Add Event** button in the `show_events` day-events popup (see [Month view](/views/month)).
+
+  This is a visual option only; it does **not** prevent creation from tappable day/slot surfaces. Use `disable_event_creation: true` when you need to block all new-event creation. Users can still edit and delete existing events unless you also disable event management or mark calendars as read-only.
 </ParamField>
 
 <ParamField path="hide_event_actions" default="[]" type="list">
@@ -179,6 +187,7 @@ entities:
   - calendar.work
   - calendar.holidays_in_united_states
 enable_event_management: true
+disable_event_creation: false
 readonly_calendars:
   - calendar.holidays_in_united_states
 hide_add_event_button: false

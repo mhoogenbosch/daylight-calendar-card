@@ -164,6 +164,7 @@ const CONFIG_COVERAGE_INVENTORY = {
   event_neutral_background: 'event color modes normalize widths and tint opacity endpoints',
   event_tint_opacity: 'event color modes normalize widths and tint opacity endpoints',
   enable_event_management: 'checkAllCalendarCapabilities marks google, caldav, and local capabilities correctly',
+  disable_event_creation: 'disable_event_creation blocks every new-event UI path while preserving existing-event actions',
   event_time_step: 'event_time_step normalizes to the supported steps and renders stepped time controls',
   event_modal_size: 'event_modal_size defaults and normalizes to supported modal size classes',
   hide_event_actions: 'hide_event_actions hides configured event detail actions without changing capabilities',
@@ -256,8 +257,13 @@ test('month_day_tap_action normalizes to create by default and accepts show_even
 
 // --- month_day_tap_action behavior matrix -------------------------------------
 // Drives the real .day-cell click handler and records which modal it opened.
-function runMonthDayTap({ tap, management, writable, busy }) {
-  const card = makeCard({ entities: ['calendar.family'], enable_event_management: management, month_day_tap_action: tap });
+function runMonthDayTap({ tap, management, writable, busy, disableCreation = false }) {
+  const card = makeCard({
+    entities: ['calendar.family'],
+    enable_event_management: management,
+    disable_event_creation: disableCreation,
+    month_day_tap_action: tap
+  });
   const handlers = {};
   const dayEl = { addEventListener: (n, cb) => { handlers[n] = cb; }, getAttribute: () => '2026-05-01' };
   card.getRootElementById = () => null;
@@ -299,11 +305,19 @@ test('month_day_tap_action decides busy vs empty from visible events (getEventsF
   assert.deepEqual(runMonthDayTap({ tap: 'show_events', management: true, writable: true, busy: false }), { create: 1, dayModal: 0 });
 });
 
+test('disable_event_creation blocks month creation while preserving event browsing', () => {
+  assert.deepEqual(runMonthDayTap({ tap: 'create', management: true, writable: true, busy: true, disableCreation: true }), { create: 0, dayModal: 1 });
+  assert.deepEqual(runMonthDayTap({ tap: 'create', management: true, writable: true, busy: false, disableCreation: true }), { create: 0, dayModal: 0 });
+  assert.deepEqual(runMonthDayTap({ tap: 'show_events', management: true, writable: true, busy: true, disableCreation: true }), { create: 0, dayModal: 1 });
+  assert.deepEqual(runMonthDayTap({ tap: 'show_events', management: true, writable: true, busy: false, disableCreation: true }), { create: 0, dayModal: 0 });
+});
+
 // --- showDayModal Add Event button + back-navigation --------------------------
-function renderDayModal({ management = true, writable = true, hideAdd = false, displayTitle = null } = {}) {
+function renderDayModal({ management = true, writable = true, hideAdd = false, disableCreation = false, displayTitle = null } = {}) {
   const card = makeCard({
     entities: ['calendar.family'],
     enable_event_management: management,
+    disable_event_creation: disableCreation,
     hide_add_event_button: hideAdd,
     ...(displayTitle ? { event_styles: [{ match: { title: { exact: 'Sample' } }, style: { display_title: displayTitle } }] } : {})
   });
@@ -349,6 +363,7 @@ test('showDayModal shows the Add Event button only when addable', () => {
   assert.doesNotMatch(renderDayModal({ management: true, writable: true, hideAdd: true }).html, /day-modal-add-event/);
   assert.doesNotMatch(renderDayModal({ management: false, writable: false, hideAdd: false }).html, /day-modal-add-event/);
   assert.doesNotMatch(renderDayModal({ management: true, writable: false, hideAdd: false }).html, /day-modal-add-event/);
+  assert.doesNotMatch(renderDayModal({ management: true, writable: true, hideAdd: false, disableCreation: true }).html, /day-modal-add-event/);
 });
 
 test('showDayModal Add Event button opens the create form for the selected date', () => {
@@ -910,7 +925,7 @@ test('getStubConfig and normalized defaults include key configuration defaults',
     'combine_background', 'hide_calendars', 'hide_header', 'hide_year', 'hide_controls',
     'hide_navigation_buttons', 'hide_add_event_button', 'hide_view_selector',
     'hide_dark_mode_toggle', 'show_dashboard_nav_button', 'header_dashboard_path',
-    'header_weather_sensor', 'show_daily_weather_forecast', 'header_items', 'calendar_person_entities', 'default_hidden_calendars', 'color_scheme', 'enable_event_management', 'event_modal_size', 'hide_event_actions'
+    'header_weather_sensor', 'show_daily_weather_forecast', 'header_items', 'calendar_person_entities', 'default_hidden_calendars', 'color_scheme', 'enable_event_management', 'disable_event_creation', 'event_modal_size', 'hide_event_actions'
   ];
   for (const key of requiredStubKeys) assert.ok(key in stub, `${key} should exist in getStubConfig()`);
   assert.deepEqual(stub, {
@@ -971,6 +986,7 @@ test('getStubConfig and normalized defaults include key configuration defaults',
     default_hidden_calendars: [],
     color_scheme: 'auto',
     enable_event_management: true,
+    disable_event_creation: false,
     event_modal_size: 'medium',
     hide_event_actions: []
   });
@@ -981,6 +997,8 @@ test('getStubConfig and normalized defaults include key configuration defaults',
   }
   assert.equal(normalized.firstDayOfWeek, 0);
   assert.equal(normalized.event_modal_size, 'medium');
+  assert.equal(normalized.disable_event_creation, false);
+  assert.equal(makeCard({ entities: ['calendar.family'], disable_event_creation: true })._config.disable_event_creation, true);
   assert.equal(Object.prototype.hasOwnProperty.call(normalized, 'use_24hr_schedule'), false);
 });
 
@@ -1617,6 +1635,27 @@ test('hide_event_actions hides configured event detail actions without changing 
   allHidden.showEventModal(event);
 
   assert.doesNotMatch(harness.content.innerHTML, /class="modal-actions"/);
+});
+
+test('disable_event_creation hides Forward while preserving edit and delete actions', () => {
+  const card = makeCard({
+    entities: ['calendar.family'],
+    enable_event_management: true,
+    disable_event_creation: true
+  });
+  card.getWritableCalendars = () => ['calendar.family'];
+  card._calendarCapabilities = { 'calendar.family': {} };
+  const harness = createModalHarness(card);
+  const event = { ...locationEvent(), uid: 'evt-1' };
+
+  card.showEventModal(event);
+
+  assert.doesNotMatch(harness.content.innerHTML, /id="forward-event-btn"/);
+  assert.match(harness.content.innerHTML, /id="edit-event-btn"/);
+  assert.match(harness.content.innerHTML, /id="delete-event-btn"/);
+  assert.equal(harness.handlers['forward-event-btn'], undefined);
+  assert.equal(typeof harness.handlers['edit-event-btn'], 'function');
+  assert.equal(typeof harness.handlers['delete-event-btn'], 'function');
 });
 
 test('event location links are opt-in for the details modal', () => {
@@ -3517,6 +3556,20 @@ test('hide_add_event_button hides add event control only', () => {
   assert.match(html, /id="view-mode-select"/);
 });
 
+test('disable_event_creation hides the header Add Event control without hiding navigation', () => {
+  const card = new Card();
+  card._hass = { states: {}, locale: { language: 'en' }, language: 'en', themes: { darkMode: false } };
+  card.setConfig({ entities: ['calendar.family'], enable_event_management: true, disable_event_creation: true });
+  card._calendarCapabilities = { 'calendar.family': { canCreate: true, isReadonly: false } };
+
+  originalCardRender.call(card);
+  const html = card._root.innerHTML;
+
+  assert.doesNotMatch(html, /id="add-event-btn"/);
+  assert.match(html, /id="prev-period"/);
+  assert.match(html, /id="view-mode-select"/);
+});
+
 test('hide_view_selector hides view drop-down selector only', () => {
   const card = new Card();
   card._hass = { states: {}, locale: { language: 'en' }, language: 'en', themes: { darkMode: false } };
@@ -3528,6 +3581,66 @@ test('hide_view_selector hides view drop-down selector only', () => {
   assert.doesNotMatch(html, /id="view-mode-select"/);
   assert.match(html, /id="prev-period"/);
   assert.match(html, /id="today"/);
+});
+
+test('disable_event_creation prevents direct create modal opening', () => {
+  const card = makeCard({
+    entities: ['calendar.family'],
+    enable_event_management: true,
+    disable_event_creation: true
+  });
+  card.getRootElementById = () => {
+    throw new Error('create modal should not touch the DOM when creation is disabled');
+  };
+
+  assert.doesNotThrow(() => card.showCreateEventModal());
+});
+
+test('disable_event_creation blocks Agenda, Schedule slot, and Week header creation clicks', () => {
+  const card = makeCard({
+    entities: ['calendar.family'],
+    enable_event_management: true,
+    disable_event_creation: true
+  });
+  const handlers = {};
+  const datedColumn = { getAttribute: () => '2026-05-01T00:00:00.000Z' };
+  const agendaRow = {
+    addEventListener: (name, callback) => { handlers.agenda = callback; },
+    getAttribute: () => '2026-05-01T00:00:00.000Z'
+  };
+  const slot = {
+    addEventListener: (name, callback) => { handlers.slot = callback; },
+    getAttribute: (name) => name === 'data-hour' ? '9' : null,
+    closest: () => datedColumn
+  };
+  const dayHeader = {
+    addEventListener: (name, callback) => { handlers.header = callback; },
+    closest: () => datedColumn
+  };
+
+  card.getRootElementById = () => null;
+  card.observeModalVisibility = () => {};
+  card.attachSwipeControls = () => {};
+  card._root = {
+    querySelector: () => null,
+    querySelectorAll: (selector) => {
+      if (selector === '.agenda-day-row') return [agendaRow];
+      if (selector === '.day-time-slot') return [slot];
+      if (selector === '[data-click-target="day-header"]') return [dayHeader];
+      return [];
+    }
+  };
+  card.getWritableCalendars = () => ['calendar.family'];
+  let createCalls = 0;
+  card.showCreateEventModal = () => { createCalls += 1; };
+
+  card.attachEventListeners();
+  const target = { classList: { contains: () => false }, closest: () => null };
+  handlers.agenda({ target });
+  handlers.slot({ target });
+  handlers.header({ target });
+
+  assert.equal(createCalls, 0);
 });
 
 test('header button listeners invoke expected actions', () => {
@@ -3708,6 +3821,7 @@ test('editor renders key controls and updates config on change', () => {
   assert.match(editor.innerHTML, /data-field="past_event_mode"/);
   assert.match(editor.innerHTML, /<option value="hide" selected>Hide<\/option>/);
   assert.match(editor.innerHTML, /data-field="show_week_numbers_week"/);
+  assert.match(editor.innerHTML, /data-field="disable_event_creation"/);
   assert.match(editor.innerHTML, /data-field="week_number_prefix_mode"/);
   assert.match(editor.innerHTML, /data-field="week_compact_weekday_font_size"/);
   assert.match(editor.innerHTML, /data-color-field="week_compact_weekday_color"/);
@@ -3717,6 +3831,8 @@ test('editor renders key controls and updates config on change', () => {
   editor._fireConfigChanged = () => {};
   editor.handleChange({ target: { dataset: { field: 'show_event_location' }, type: 'checkbox', checked: true } });
   assert.equal(editor._config.show_event_location, true);
+  editor.handleChange({ target: { dataset: { field: 'disable_event_creation' }, type: 'checkbox', checked: true } });
+  assert.equal(editor._config.disable_event_creation, true);
   editor.handleChange({ target: { dataset: { field: 'past_event_mode' }, value: 'muted' } });
   assert.equal(editor._config.past_event_mode, 'muted');
   editor.handleChange({ target: { dataset: { field: 'week_number_prefix_mode' }, value: 'number_only' } });

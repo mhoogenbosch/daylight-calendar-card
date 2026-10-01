@@ -1896,6 +1896,12 @@ class SkylightCalendarCard extends HTMLElement {
     return getWritableCalendarsHelper(this._config.entities, this._calendarCapabilities);
   }
 
+  canCreateEvents() {
+    return !!this._config.enable_event_management &&
+      !this._config.disable_event_creation &&
+      this.getWritableCalendars().length > 0;
+  }
+
   getEventIdentityKey(entityId, event) {
     return getNormalizedEventIdentityKey(entityId, event);
   }
@@ -3784,8 +3790,7 @@ class SkylightCalendarCard extends HTMLElement {
   }
 
   renderStandardHeader() {
-    const writableCalendars = this.getWritableCalendars();
-    const canAddEvents = this._config.enable_event_management && writableCalendars.length > 0 && !this._config.hide_add_event_button;
+    const canAddEvents = this.canCreateEvents() && !this._config.hide_add_event_button;
     const shouldShowControls = !this._config.hide_controls;
 
     return renderStandardHeaderMarkup({
@@ -3796,8 +3801,7 @@ class SkylightCalendarCard extends HTMLElement {
   }
 
   renderCompactHeader() {
-    const writableCalendars = this.getWritableCalendars();
-    const canAddEvents = this._config.enable_event_management && writableCalendars.length > 0 && !this._config.hide_add_event_button;
+    const canAddEvents = this.canCreateEvents() && !this._config.hide_add_event_button;
     const shouldShowCalendars = !this._config.hide_calendars;
     const shouldShowControls = !this._config.hide_controls;
 
@@ -5832,7 +5836,7 @@ class SkylightCalendarCard extends HTMLElement {
         }
 
         const date = new Date(dayEl.getAttribute('data-date'));
-        const canManage = this._config.enable_event_management && this.getWritableCalendars().length > 0;
+        const canCreateEvents = this.canCreateEvents();
 
         // Opt-in 'show_events': tapping a day with events opens the day list;
         // empty days still go straight to create so blank days stay fast to add to.
@@ -5840,14 +5844,14 @@ class SkylightCalendarCard extends HTMLElement {
           const events = this.getEventsForDay(date);
           if (events.length > 0) {
             this.showDayModal(date, events);
-          } else if (canManage) {
+          } else if (canCreateEvents) {
             this.showCreateEventModal(date);
           }
           return;
         }
 
         // Default 'create': if event management is enabled, show create modal
-        if (canManage) {
+        if (canCreateEvents) {
           this.showCreateEventModal(date);
         } else {
           // Otherwise show events for that day
@@ -5867,7 +5871,7 @@ class SkylightCalendarCard extends HTMLElement {
           return;
         }
 
-        if (e.target.closest('.day-badge-action') || !this._config.enable_event_management || this.getWritableCalendars().length === 0) {
+        if (e.target.closest('.day-badge-action') || !this.canCreateEvents()) {
           return;
         }
 
@@ -5879,7 +5883,7 @@ class SkylightCalendarCard extends HTMLElement {
     // Time slot click handlers (schedule view)
     this._root.querySelectorAll('.day-time-slot').forEach(slotEl => {
       slotEl.addEventListener('click', (e) => {
-        if (!this._config.enable_event_management || this.getWritableCalendars().length === 0) {
+        if (!this.canCreateEvents()) {
           return;
         }
 
@@ -5898,7 +5902,7 @@ class SkylightCalendarCard extends HTMLElement {
     // Day header click handlers (week views)
     this._root.querySelectorAll('[data-click-target="day-header"]').forEach(headerEl => {
       headerEl.addEventListener('click', (e) => {
-        if (!this._config.enable_event_management || this.getWritableCalendars().length === 0) {
+        if (!this.canCreateEvents()) {
           return;
         }
 
@@ -6433,6 +6437,9 @@ class SkylightCalendarCard extends HTMLElement {
   }
 
   showCreateEventModal(defaultDate = null, defaultTime = null, options = {}) {
+    if (!this._config.enable_event_management || this._config.disable_event_creation) {
+      return;
+    }
 
     const modal = this.getRootElementById('event-modal');
     const content = this.getRootElementById('modal-content');
@@ -7040,6 +7047,10 @@ class SkylightCalendarCard extends HTMLElement {
   }
 
   showForwardEventModal(event, startDate, endDate, isAllDay) {
+    if (!this.canCreateEvents()) {
+      return;
+    }
+
     const modal = this.getRootElementById('event-modal');
     const content = this.getRootElementById('modal-content');
     this.applyEventModalSizeClass(content);
@@ -7546,7 +7557,7 @@ class SkylightCalendarCard extends HTMLElement {
     // WebSocket delete works for Google Calendar and other integrations
     const canEdit = canModify;
     const canDelete = canModify; // WebSocket delete works for all calendars including Google
-    const canForward = !!this._config.enable_event_management && this.getWritableCalendars().length > 0;
+    const canForward = this.canCreateEvents();
 
     content.innerHTML = renderEventDetailsModal({
       event,
@@ -7843,7 +7854,7 @@ class SkylightCalendarCard extends HTMLElement {
           `;
         }).join('') || `<div class="empty-state-subtext">${this.t('noEvents')}</div>`}
       </div>
-      ${(this._config.enable_event_management && this.getWritableCalendars().length > 0 && !this._config.hide_add_event_button) ? `
+      ${(this.canCreateEvents() && !this._config.hide_add_event_button) ? `
       <div class="modal-actions">
         <div class="modal-actions-right">
           <button class="btn btn-primary" id="day-modal-add-event">${this.t('addEvent')}</button>
