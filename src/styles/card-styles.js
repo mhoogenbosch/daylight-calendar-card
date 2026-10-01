@@ -627,6 +627,10 @@ export function getCardStyles() {
         opacity: 0.5;
       }
 
+      .day-cell.other-month.month-span-origin {
+        z-index: 2;
+      }
+
       .day-cell.today {
         background: #eff6ff;
       }

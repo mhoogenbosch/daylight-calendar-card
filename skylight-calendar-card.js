@@ -4261,6 +4261,10 @@ function getCardStyles() {
         opacity: 0.5;
       }
 
+      .day-cell.other-month.month-span-origin {
+        z-index: 2;
+      }
+
       .day-cell.today {
         background: #eff6ff;
       }
@@ -10817,8 +10821,12 @@ function renderDayCell({
   visibleEvents,
   helpers
 }) {
+  const hasMonthSpanOrigin = isOtherMonth && (monthSpanLanes || []).some((lane) =>
+    lane?.isFirstVisibleSegment && lane.visibleDaySpan > 1
+  );
   let classes = 'day-cell';
   if (isOtherMonth) classes += ' other-month';
+  if (hasMonthSpanOrigin) classes += ' month-span-origin';
   if (isToday) classes += ' today';
   classes += dayStyle.className ? ` ${dayStyle.className}` : '';
   const dayStyleAttr = dayStyle.style ? ` style="${dayStyle.style}"` : '';
