@@ -117,6 +117,7 @@ export function createConfigNormalizationSchema({
       { key: 'event_neutral_background', defaultValue: ({ rawConfig }) => normalizeSingleColor(rawConfig.event_neutral_background) || DEFAULT_EVENT_NEUTRAL_BACKGROUND, normalize: ({ rawConfig }) => normalizeSingleColor(rawConfig.event_neutral_background) || DEFAULT_EVENT_NEUTRAL_BACKGROUND },
       { key: 'event_tint_opacity', defaultValue: ({ rawConfig }) => normalizeBackgroundOpacity(rawConfig.event_tint_opacity, DEFAULT_EVENT_TINT_OPACITY), normalize: ({ rawConfig }) => normalizeBackgroundOpacity(rawConfig.event_tint_opacity, DEFAULT_EVENT_TINT_OPACITY) },
       { key: 'enable_event_management', defaultValue: ({ rawConfig }) => rawConfig.enable_event_management === false ? false : DEFAULT_CONFIG_VALUES.enable_event_management },
+      { key: 'disable_event_creation', defaultValue: ({ rawConfig }) => rawConfig.disable_event_creation === true ? true : DEFAULT_CONFIG_VALUES.disable_event_creation },
       { key: 'event_modal_size', defaultValue: ({ rawConfig }) => normalizeEventModalSize(rawConfig.event_modal_size), normalize: ({ rawConfig }) => normalizeEventModalSize(rawConfig.event_modal_size) },
       { key: 'event_time_step', defaultValue: ({ rawConfig }) => normalizeEventTimeStep(rawConfig.event_time_step), normalize: ({ rawConfig }) => normalizeEventTimeStep(rawConfig.event_time_step) },
       { key: 'hide_event_actions', defaultValue: ({ rawConfig }) => normalizeEventActions(rawConfig.hide_event_actions), normalize: ({ rawConfig }) => normalizeEventActions(rawConfig.hide_event_actions) },
