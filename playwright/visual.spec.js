@@ -1378,6 +1378,71 @@ test('visual: stepped event time pickers stay contained at mobile width in 12- a
   }
 });
 
+test('regression issue 608: month span starting in other-month cell paints across current-month cells', async ({ page }) => {
+  await page.setViewportSize({ width: 1360, height: 820 });
+  const fixtureUrl = `file://${path.join(process.cwd(), 'playwright', 'ha-fixture.html')}`;
+  await page.goto(fixtureUrl);
+  await page.evaluate((params) => window.renderCalendarCard(params), {
+    config: {
+      entities: ['calendar.family'],
+      default_view: 'month',
+      first_day_of_week: 1,
+      hide_header: true
+    },
+    events: {
+      'calendar.family': [
+        { summary: 'Cross-month vacation', start: '2026-09-29', end: '2026-10-07' }
+      ]
+    },
+    darkMode: false
+  });
+
+  const card = page.locator('skylight-calendar-card');
+  await expect(card).toBeVisible();
+
+  await card.evaluate(async (element) => {
+    element._currentDate = new Date(2026, 9, 1);
+    element.setWeekStart();
+    await element.ensureEventsForCurrentRange({ force: true, renderIfCovered: true });
+    element.render();
+  });
+
+  const leadingDay = card.locator('.day-cell[data-date^="2026-09-29"]').first();
+  const span = leadingDay.locator('.month-span-event').filter({ hasText: 'Cross-month vacation' });
+  await expect(span).toHaveCount(1);
+  await expect(span).toHaveAttribute('data-month-span-days', '6');
+
+  // Keep ordinary leading-month content muted without making the whole cell a stacking context.
+  await expect(leadingDay).toHaveCSS('opacity', '1');
+  await expect(leadingDay.locator('.day-header-row')).toHaveCSS('opacity', '0.5');
+  await expect(span).toHaveCSS('opacity', '1');
+
+  const paintState = await card.evaluate((element) => {
+    const event = Array.from(element.querySelectorAll('.day-cell[data-date^="2026-09-29"] .month-span-event'))
+      .find((candidate) => candidate.textContent.includes('Cross-month vacation'));
+    const octoberFirst = element.querySelector('.day-cell[data-date^="2026-10-01"]');
+    const octoberFourth = element.querySelector('.day-cell[data-date^="2026-10-04"]');
+    if (!event || !octoberFirst || !octoberFourth) return null;
+
+    const eventRect = event.getBoundingClientRect();
+    const firstRect = octoberFirst.getBoundingClientRect();
+    const fourthRect = octoberFourth.getBoundingClientRect();
+    const sampleX = firstRect.left + (firstRect.width / 2);
+    const sampleY = eventRect.top + (eventRect.height / 2);
+    const topmost = document.elementFromPoint(sampleX, sampleY);
+
+    return {
+      reachesFourthDay: eventRect.right >= fourthRect.right - 1,
+      paintsOverOctoberFirst: !!topmost && (topmost === event || event.contains(topmost))
+    };
+  });
+
+  expect(paintState).toEqual({
+    reachesFourthDay: true,
+    paintsOverOctoberFirst: true
+  });
+});
+
 for (const scenario of cases) {
   test(`visual: ${scenario.name}`, async ({ page }) => {
     if (scenario.viewport) {
