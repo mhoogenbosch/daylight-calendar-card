@@ -3635,7 +3635,7 @@ test('disable_event_creation blocks Agenda, Schedule slot, and Week header creat
   card.showCreateEventModal = () => { createCalls += 1; };
 
   card.attachEventListeners();
-  const target = { closest: () => null };
+  const target = { classList: { contains: () => false }, closest: () => null };
   handlers.agenda({ target });
   handlers.slot({ target });
   handlers.header({ target });
