@@ -1399,11 +1399,13 @@ test('regression issue 608: month span starting in other-month cell paints acros
 
   const card = page.locator('skylight-calendar-card');
   await expect(card).toBeVisible();
+  await expect.poll(async () => card.evaluate((element) =>
+    element._eventsByCalendar?.['calendar.family']?.length || 0
+  )).toBe(1);
 
-  await card.evaluate(async (element) => {
+  await card.evaluate((element) => {
     element._currentDate = new Date(2026, 9, 1);
     element.setWeekStart();
-    await element.ensureEventsForCurrentRange({ force: true, renderIfCovered: true });
     element.render();
   });
 
