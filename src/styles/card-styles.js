@@ -624,6 +624,12 @@ export function getCardStyles() {
 
       .day-cell.other-month {
         background: #fafafa;
+      }
+
+      .day-cell.other-month > .day-header-row,
+      .day-cell.other-month > .event:not(.month-span-event),
+      .day-cell.other-month > .week-compact-event,
+      .day-cell.other-month > .more-events {
         opacity: 0.5;
       }
 
