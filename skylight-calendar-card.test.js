@@ -9693,6 +9693,12 @@ test('agenda cache retention has useful current-view fallback before DOM visible
   card._hass = { user: { id: 'user-1' } };
   card._viewMode = 'agenda';
   card._currentDate = new Date('2026-06-15T12:00:00Z');
+  // makeCard() initializes the agenda window from the real current date.
+  // Clear it so this test actually exercises the _currentDate fallback path.
+  card._agendaStartDate = null;
+  card._agendaEndDate = null;
+  card._agendaVisibleStartDate = null;
+  card._agendaVisibleEndDate = null;
   card.getVisibleDateRange = () => ({ startDate: new Date('2025-01-01T00:00:00Z'), endDate: new Date('2028-01-01T00:00:00Z') });
   card._eventsByCalendar = {
     'calendar.a': [
