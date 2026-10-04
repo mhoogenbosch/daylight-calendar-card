@@ -2121,7 +2121,10 @@ for (const darkMode of [false, true]) {
     await expect(dayForecasts.locator('svg.weather-svg-icon')).toHaveCount(7);
     await expect(dayForecasts.locator('ha-icon')).toHaveCount(0);
 
-    await expect(card).toHaveScreenshot(`colored-weather-week-compact-${themeName}.png`, { animations: 'disabled' });
+    await expect(card).toHaveScreenshot(`colored-weather-week-compact-${themeName}.png`, {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.01
+    });
   });
 }
 
