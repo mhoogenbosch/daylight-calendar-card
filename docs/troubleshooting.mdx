@@ -123,6 +123,7 @@ The Daylight Calendar Card is designed to work out of the box with any Home Assi
     Check each of the following in your card YAML:
 
     - `enable_event_management: false` — set this to `true` to enable event management.
+    - `disable_event_creation: true` — set this to `false` or remove the line if you want to create new events from the card.
     - `hide_add_event_button: true` — set this to `false` or remove the line entirely.
     - All of your calendar entities are listed under `readonly_calendars` — remove any calendars you want to write to from that list.
 
@@ -131,6 +132,7 @@ The Daylight Calendar Card is designed to work out of the box with any Home Assi
     entities:
       - calendar.my_calendar
     enable_event_management: true
+    disable_event_creation: false
     hide_add_event_button: false
     readonly_calendars: []
     ```

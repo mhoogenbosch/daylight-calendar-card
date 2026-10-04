@@ -1151,6 +1151,7 @@ export class SkylightCalendarCardEditor extends HTMLElement {
     const managementSection = this.renderSection('Event management', `
       <div class="boolean-list">
         <label><input type="checkbox" data-field="enable_event_management" ${this._config.enable_event_management !== false ? 'checked' : ''}> Enable event management</label>
+        <label><input type="checkbox" data-field="disable_event_creation" ${this._config.disable_event_creation ? 'checked' : ''}> Disable creation of new events</label>
       </div>
       <div class="field-row">
         <div class="field field-inline">

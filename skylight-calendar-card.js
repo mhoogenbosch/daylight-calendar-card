@@ -131,6 +131,7 @@ const DEFAULT_CONFIG_VALUES = {
   background_image_url: null,
   combine_calendars: false,
   enable_event_management: true,
+  disable_event_creation: false,
   event_time_step: DEFAULT_EVENT_TIME_STEP,
   hide_event_actions: [],
   readonly_calendars: [],
@@ -199,6 +200,7 @@ const DEFAULT_STUB_CONFIG = {
   default_hidden_calendars: [],
   color_scheme: 'auto',
   enable_event_management: true,
+  disable_event_creation: false,
   event_modal_size: 'medium',
   hide_event_actions: []
 };
@@ -765,6 +767,7 @@ function createConfigNormalizationSchema({
       { key: 'event_neutral_background', defaultValue: ({ rawConfig }) => normalizeSingleColor(rawConfig.event_neutral_background) || DEFAULT_EVENT_NEUTRAL_BACKGROUND, normalize: ({ rawConfig }) => normalizeSingleColor(rawConfig.event_neutral_background) || DEFAULT_EVENT_NEUTRAL_BACKGROUND },
       { key: 'event_tint_opacity', defaultValue: ({ rawConfig }) => normalizeBackgroundOpacity(rawConfig.event_tint_opacity, DEFAULT_EVENT_TINT_OPACITY), normalize: ({ rawConfig }) => normalizeBackgroundOpacity(rawConfig.event_tint_opacity, DEFAULT_EVENT_TINT_OPACITY) },
       { key: 'enable_event_management', defaultValue: ({ rawConfig }) => rawConfig.enable_event_management === false ? false : DEFAULT_CONFIG_VALUES.enable_event_management },
+      { key: 'disable_event_creation', defaultValue: ({ rawConfig }) => rawConfig.disable_event_creation === true ? true : DEFAULT_CONFIG_VALUES.disable_event_creation },
       { key: 'event_modal_size', defaultValue: ({ rawConfig }) => normalizeEventModalSize(rawConfig.event_modal_size), normalize: ({ rawConfig }) => normalizeEventModalSize(rawConfig.event_modal_size) },
       { key: 'event_time_step', defaultValue: ({ rawConfig }) => normalizeEventTimeStep(rawConfig.event_time_step), normalize: ({ rawConfig }) => normalizeEventTimeStep(rawConfig.event_time_step) },
       { key: 'hide_event_actions', defaultValue: ({ rawConfig }) => normalizeEventActions(rawConfig.hide_event_actions), normalize: ({ rawConfig }) => normalizeEventActions(rawConfig.hide_event_actions) },
@@ -1056,7 +1059,7 @@ function getEntityRenderSignature(hass, entityIds = []) {
   }));
 }
 
-const DAYLIGHT_CALENDAR_CARD_VERSION = 'v4.12.0';
+const DAYLIGHT_CALENDAR_CARD_VERSION = 'dev';
 
 function getDaylightCalendarCardVersion() {
   return DAYLIGHT_CALENDAR_CARD_VERSION.includes('__')
@@ -2687,6 +2690,7 @@ class SkylightCalendarCardEditor extends HTMLElement {
     const managementSection = this.renderSection('Event management', `
       <div class="boolean-list">
         <label><input type="checkbox" data-field="enable_event_management" ${this._config.enable_event_management !== false ? 'checked' : ''}> Enable event management</label>
+        <label><input type="checkbox" data-field="disable_event_creation" ${this._config.disable_event_creation ? 'checked' : ''}> Disable creation of new events</label>
       </div>
       <div class="field-row">
         <div class="field field-inline">
@@ -4259,6 +4263,10 @@ function getCardStyles() {
       .day-cell.other-month {
         background: #fafafa;
         opacity: 0.5;
+      }
+
+      .day-cell.other-month.month-span-origin {
+        z-index: 2;
       }
 
       .day-cell.today {
@@ -10817,8 +10825,12 @@ function renderDayCell({
   visibleEvents,
   helpers
 }) {
+  const hasMonthSpanOrigin = isOtherMonth && (monthSpanLanes || []).some((lane) =>
+    lane?.isFirstVisibleSegment && lane.visibleDaySpan > 1
+  );
   let classes = 'day-cell';
   if (isOtherMonth) classes += ' other-month';
+  if (hasMonthSpanOrigin) classes += ' month-span-origin';
   if (isToday) classes += ' today';
   classes += dayStyle.className ? ` ${dayStyle.className}` : '';
   const dayStyleAttr = dayStyle.style ? ` style="${dayStyle.style}"` : '';
@@ -12894,6 +12906,12 @@ class SkylightCalendarCard extends HTMLElement {
     return getWritableCalendars(this._config.entities, this._calendarCapabilities);
   }
 
+  canCreateEvents() {
+    return !!this._config.enable_event_management &&
+      !this._config.disable_event_creation &&
+      this.getWritableCalendars().length > 0;
+  }
+
   getEventIdentityKey(entityId, event) {
     return getEventIdentityKey(entityId, event);
   }
@@ -14782,8 +14800,7 @@ class SkylightCalendarCard extends HTMLElement {
   }
 
   renderStandardHeader() {
-    const writableCalendars = this.getWritableCalendars();
-    const canAddEvents = this._config.enable_event_management && writableCalendars.length > 0 && !this._config.hide_add_event_button;
+    const canAddEvents = this.canCreateEvents() && !this._config.hide_add_event_button;
     const shouldShowControls = !this._config.hide_controls;
 
     return renderStandardHeader({
@@ -14794,8 +14811,7 @@ class SkylightCalendarCard extends HTMLElement {
   }
 
   renderCompactHeader() {
-    const writableCalendars = this.getWritableCalendars();
-    const canAddEvents = this._config.enable_event_management && writableCalendars.length > 0 && !this._config.hide_add_event_button;
+    const canAddEvents = this.canCreateEvents() && !this._config.hide_add_event_button;
     const shouldShowCalendars = !this._config.hide_calendars;
     const shouldShowControls = !this._config.hide_controls;
 
@@ -16830,7 +16846,7 @@ class SkylightCalendarCard extends HTMLElement {
         }
 
         const date = new Date(dayEl.getAttribute('data-date'));
-        const canManage = this._config.enable_event_management && this.getWritableCalendars().length > 0;
+        const canCreateEvents = this.canCreateEvents();
 
         // Opt-in 'show_events': tapping a day with events opens the day list;
         // empty days still go straight to create so blank days stay fast to add to.
@@ -16838,14 +16854,14 @@ class SkylightCalendarCard extends HTMLElement {
           const events = this.getEventsForDay(date);
           if (events.length > 0) {
             this.showDayModal(date, events);
-          } else if (canManage) {
+          } else if (canCreateEvents) {
             this.showCreateEventModal(date);
           }
           return;
         }
 
         // Default 'create': if event management is enabled, show create modal
-        if (canManage) {
+        if (canCreateEvents) {
           this.showCreateEventModal(date);
         } else {
           // Otherwise show events for that day
@@ -16865,7 +16881,7 @@ class SkylightCalendarCard extends HTMLElement {
           return;
         }
 
-        if (e.target.closest('.day-badge-action') || !this._config.enable_event_management || this.getWritableCalendars().length === 0) {
+        if (e.target.closest('.day-badge-action') || !this.canCreateEvents()) {
           return;
         }
 
@@ -16877,7 +16893,7 @@ class SkylightCalendarCard extends HTMLElement {
     // Time slot click handlers (schedule view)
     this._root.querySelectorAll('.day-time-slot').forEach(slotEl => {
       slotEl.addEventListener('click', (e) => {
-        if (!this._config.enable_event_management || this.getWritableCalendars().length === 0) {
+        if (!this.canCreateEvents()) {
           return;
         }
 
@@ -16896,7 +16912,7 @@ class SkylightCalendarCard extends HTMLElement {
     // Day header click handlers (week views)
     this._root.querySelectorAll('[data-click-target="day-header"]').forEach(headerEl => {
       headerEl.addEventListener('click', (e) => {
-        if (!this._config.enable_event_management || this.getWritableCalendars().length === 0) {
+        if (!this.canCreateEvents()) {
           return;
         }
 
@@ -17431,6 +17447,9 @@ class SkylightCalendarCard extends HTMLElement {
   }
 
   showCreateEventModal(defaultDate = null, defaultTime = null, options = {}) {
+    if (!this._config.enable_event_management || this._config.disable_event_creation) {
+      return;
+    }
 
     const modal = this.getRootElementById('event-modal');
     const content = this.getRootElementById('modal-content');
@@ -18038,6 +18057,10 @@ class SkylightCalendarCard extends HTMLElement {
   }
 
   showForwardEventModal(event, startDate, endDate, isAllDay) {
+    if (!this.canCreateEvents()) {
+      return;
+    }
+
     const modal = this.getRootElementById('event-modal');
     const content = this.getRootElementById('modal-content');
     this.applyEventModalSizeClass(content);
@@ -18544,7 +18567,7 @@ class SkylightCalendarCard extends HTMLElement {
     // WebSocket delete works for Google Calendar and other integrations
     const canEdit = canModify;
     const canDelete = canModify; // WebSocket delete works for all calendars including Google
-    const canForward = !!this._config.enable_event_management && this.getWritableCalendars().length > 0;
+    const canForward = this.canCreateEvents();
 
     content.innerHTML = renderEventDetailsModal({
       event,
@@ -18841,7 +18864,7 @@ class SkylightCalendarCard extends HTMLElement {
           `;
         }).join('') || `<div class="empty-state-subtext">${this.t('noEvents')}</div>`}
       </div>
-      ${(this._config.enable_event_management && this.getWritableCalendars().length > 0 && !this._config.hide_add_event_button) ? `
+      ${(this.canCreateEvents() && !this._config.hide_add_event_button) ? `
       <div class="modal-actions">
         <div class="modal-actions-right">
           <button class="btn btn-primary" id="day-modal-add-event">${this.t('addEvent')}</button>

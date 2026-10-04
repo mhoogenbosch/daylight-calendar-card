@@ -98,6 +98,7 @@ export const DEFAULT_CONFIG_VALUES = {
   background_image_url: null,
   combine_calendars: false,
   enable_event_management: true,
+  disable_event_creation: false,
   event_time_step: DEFAULT_EVENT_TIME_STEP,
   hide_event_actions: [],
   readonly_calendars: [],
@@ -166,6 +167,7 @@ export const DEFAULT_STUB_CONFIG = {
   default_hidden_calendars: [],
   color_scheme: 'auto',
   enable_event_management: true,
+  disable_event_creation: false,
   event_modal_size: 'medium',
   hide_event_actions: []
 };
