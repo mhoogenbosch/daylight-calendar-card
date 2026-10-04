@@ -1,6 +1,13 @@
 // Multi-colour weather icons for `weather_icon_style: colored`.
-// SVG shapes adapted from the Home Assistant frontend (src/data/weather.ts),
-// Copyright Home Assistant contributors, licensed under the Apache License 2.0.
+/*!
+ * The SVG path data below is adapted from the Home Assistant frontend
+ * (https://github.com/home-assistant/frontend, src/data/weather.ts).
+ * Copyright Home Assistant contributors.
+ * Licensed under the Apache License, Version 2.0; you may obtain a copy at
+ * https://www.apache.org/licenses/LICENSE-2.0 (also in LICENSES/Apache-2.0.txt).
+ * Modified: path data regrouped per condition and given CSS classes for theming.
+ * See THIRD_PARTY_NOTICES.md.
+ */
 
 const SUN = 'm 14.39303,8.4033507 c 0,3.3114723 -2.684145,5.9956173 -5.9956169,5.9956173 -3.3114716,0 -5.9956168,-2.684145 -5.9956168,-5.9956173 0,-3.311471 2.6841452,-5.995617 5.9956168,-5.995617 3.3114719,0 5.9956169,2.684146 5.9956169,5.995617';
 const MOON = 'm 13.502891,11.382935 c -1.011285,1.859223 -2.976664,3.121381 -5.2405751,3.121381 -3.289929,0 -5.953329,-2.663833 -5.953329,-5.9537625 0,-2.263911 1.261724,-4.228856 3.120948,-5.240575 -0.452782,0.842738 -0.712753,1.806363 -0.712753,2.832381 0,3.289928 2.663833,5.9533275 5.9533291,5.9533275 1.026017,0 1.989641,-0.259969 2.83238,-0.712752';
@@ -46,7 +53,7 @@ const path = (cls, d) => `<path class="${cls}" d="${d}"/>`;
 // (callers then fall back to the regular MDI icon).
 export function renderColoredWeatherSvg(conditionValue, { nightTime = false } = {}) {
   let condition = normalizeWeatherCondition(conditionValue);
-  if (condition === 'clear') condition = 'sunny';
+  if (condition === 'clear') condition = nightTime ? 'clear-night' : 'sunny';
   if (!COLORED_WEATHER_CONDITIONS.has(condition)) return '';
 
   const parts = [];

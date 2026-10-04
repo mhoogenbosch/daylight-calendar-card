@@ -1128,8 +1128,12 @@ class SkylightCalendarCard extends HTMLElement {
       previousHeaderItemsState !== nextHeaderItemsState;
     const badgePersonStateChanged = this.getCalendarBadgePersonRenderSignature(oldHass) !==
       this.getCalendarBadgePersonRenderSignature(hass);
+    // Colored weather icons pick the day/night artwork from sun.sun.
+    const headerWeatherSunChanged = !!configuredHeaderWeatherSensor &&
+      this._config?.weather_icon_style === 'colored' &&
+      oldHass?.states?.['sun.sun']?.state !== hass?.states?.['sun.sun']?.state;
 
-    if (headerSensorChanged || badgePersonStateChanged) {
+    if (headerSensorChanged || badgePersonStateChanged || headerWeatherSunChanged) {
       if (this.isEventManagementDialogOpen()) {
         this._pendingHeaderSensorRender = true;
       } else {

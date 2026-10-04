@@ -3333,6 +3333,55 @@ test('weather_icon_style colored renders multi-colour SVG icons and keeps MDI as
   assert.doesNotMatch(fallbackHtml, /weather-svg-icon/);
 });
 
+test('colored header weather rerenders when only sun.sun changes', () => {
+  const makeHass = (sunState) => ({
+    states: {
+      'weather.home': { state: 'partlycloudy', attributes: { temperature: 21 } },
+      'sun.sun': { state: sunState, attributes: {} }
+    },
+    locale: { language: 'en' },
+    language: 'en',
+    themes: { darkMode: false }
+  });
+  const prepare = (config) => {
+    const card = makeCard(config);
+    card._hass = makeHass('above_horizon');
+    card._activeLanguage = 'en';
+    card._isDarkMode = false;
+    card.checkAllCalendarCapabilities = () => {};
+    card.ensureWeatherForecastSubscription = () => {};
+    card.refreshWeatherForecastData = () => {};
+    card.ensureEventsForCurrentRange = () => {};
+    card.isEventManagementDialogOpen = () => false;
+    card.renderCount = 0;
+    card.renderPreservingAgendaScroll = () => { card.renderCount += 1; };
+    return card;
+  };
+
+  const card = prepare({ entities: ['calendar.family'], header_weather_sensor: 'weather.home', weather_icon_style: 'colored' });
+  assert.match(card.renderHeaderTitle(), /class="sun"/);
+  card.hass = makeHass('below_horizon');
+  assert.equal(card.renderCount, 1);
+  assert.match(card.renderHeaderTitle(), /class="moon"/);
+  assert.doesNotMatch(card.renderHeaderTitle(), /class="sun"/);
+  card.hass = makeHass('above_horizon');
+  assert.equal(card.renderCount, 2);
+  assert.match(card.renderHeaderTitle(), /class="sun"/);
+
+  const mdiCard = prepare({ entities: ['calendar.family'], header_weather_sensor: 'weather.home' });
+  mdiCard.hass = makeHass('below_horizon');
+  assert.equal(mdiCard.renderCount, 0, 'default MDI icons do not depend on sun.sun');
+});
+
+test('colored weather clear alias follows nightTime', async () => {
+  const { renderColoredWeatherSvg } = await import('./src/weather/weather-svg-icons.js');
+  assert.match(renderColoredWeatherSvg('clear'), /class="sun"/);
+  assert.doesNotMatch(renderColoredWeatherSvg('clear'), /class="moon"/);
+  assert.match(renderColoredWeatherSvg('clear', { nightTime: true }), /class="moon"/);
+  assert.doesNotMatch(renderColoredWeatherSvg('clear', { nightTime: true }), /class="sun"/);
+  assert.equal(renderColoredWeatherSvg('clear', { nightTime: true }), renderColoredWeatherSvg('clear-night'));
+});
+
 test('colored weather SVG covers every Home Assistant condition that has artwork', async () => {
   const { renderColoredWeatherSvg } = await import('./src/weather/weather-svg-icons.js');
   const conditions = ['sunny', 'clear-night', 'partlycloudy', 'cloudy', 'fog', 'hail', 'lightning', 'lightning-rainy', 'pouring', 'rainy', 'snowy', 'snowy-rainy', 'windy', 'windy-variant'];
