@@ -3837,6 +3837,7 @@ class SkylightCalendarCard extends HTMLElement {
     return renderCalendarBadgesInlineMarkup({
       badgeItems: this.getVirtualBadgeItems(),
       hideCalendarNames: !!this._config.hide_calendar_names,
+      hidePersonState: !!this._config.hide_calendar_badge_person_state,
       helpers: this.getCalendarBadgeRenderHelpers()
     });
   }
@@ -4241,6 +4242,7 @@ class SkylightCalendarCard extends HTMLElement {
     return renderCalendarBadgesMarkup({
       badgeItems: this.getVirtualBadgeItems(),
       hideCalendarNames: !!this._config.hide_calendar_names,
+      hidePersonState: !!this._config.hide_calendar_badge_person_state,
       helpers: this.getCalendarBadgeRenderHelpers()
     });
   }
@@ -8096,6 +8098,7 @@ class SkylightCalendarCard extends HTMLElement {
     return renderCalendarBadgeLabelMarkup({
       badgeItem,
       badgeTextColor,
+      hidePersonState: !!this._config?.hide_calendar_badge_person_state,
       helpers: this.getCalendarBadgeRenderHelpers()
     });
   }
