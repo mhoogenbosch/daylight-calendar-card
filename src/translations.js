@@ -132,7 +132,11 @@ export const TRANSLATIONS = {
       eventTitleWithStartTime: '{title}, {time}',
       monthWeekPrefix: 'CW',
       monthWeekAriaLabel: 'Week {week}',
-      eventRefreshStaleWarning: 'Unable to refresh calendar data since {time}'
+      eventRefreshStaleWarning: 'Unable to refresh calendar data since {time}',
+      countdown: 'Countdown',
+      countdownToday: 'Today',
+      countdownTomorrow: 'Tomorrow',
+      countdownDays: '{count} days'
     }
   },
 
@@ -260,7 +264,11 @@ export const TRANSLATIONS = {
       eventTitleWithStartTime: '{title}, {time}',
       monthWeekPrefix: 'Sem',
       monthWeekAriaLabel: 'Semaine {week}',
-      eventRefreshStaleWarning: 'Impossible d’actualiser les données du calendrier depuis {time}'
+      eventRefreshStaleWarning: 'Impossible d’actualiser les données du calendrier depuis {time}',
+      countdown: 'Compte à rebours',
+      countdownToday: "Aujourd'hui",
+      countdownTomorrow: 'Demain',
+      countdownDays: '{count} jours'
     }
   },
 
@@ -388,7 +396,11 @@ export const TRANSLATIONS = {
       eventTitleWithStartTime: '{title}, {time}',
       monthWeekPrefix: 'KW',
       monthWeekAriaLabel: 'Woche {week}',
-      eventRefreshStaleWarning: 'Kalenderdaten konnten seit {time} nicht aktualisiert werden'
+      eventRefreshStaleWarning: 'Kalenderdaten konnten seit {time} nicht aktualisiert werden',
+      countdown: 'Countdown',
+      countdownToday: 'Heute',
+      countdownTomorrow: 'Morgen',
+      countdownDays: '{count} Tage'
     }
   },
 
@@ -516,7 +528,11 @@ export const TRANSLATIONS = {
       eventTitleWithStartTime: '{title}, {time}',
       monthWeekPrefix: 'wk',
       monthWeekAriaLabel: 'Week {week}',
-      eventRefreshStaleWarning: 'Kan agendagegevens niet vernieuwen sinds {time}'
+      eventRefreshStaleWarning: 'Kan agendagegevens niet vernieuwen sinds {time}',
+      countdown: 'Aftellen',
+      countdownToday: 'Vandaag',
+      countdownTomorrow: 'Morgen',
+      countdownDays: 'nog {count} dagen'
     }
   },
   es: {
@@ -643,7 +659,11 @@ export const TRANSLATIONS = {
       eventTitleWithStartTime: '{title}, {time}',
       monthWeekPrefix: 'Sem.',
       monthWeekAriaLabel: 'Semana {week}',
-      eventRefreshStaleWarning: 'No se pueden actualizar los datos del calendario desde {time}'
+      eventRefreshStaleWarning: 'No se pueden actualizar los datos del calendario desde {time}',
+      countdown: 'Cuenta atrás',
+      countdownToday: 'Hoy',
+      countdownTomorrow: 'Mañana',
+      countdownDays: '{count} días'
     }
   },
   
@@ -771,7 +791,11 @@ export const TRANSLATIONS = {
       eventTitleWithStartTime: '{title}, {time}',
       monthWeekPrefix: 'Nädal',
       monthWeekAriaLabel: 'Nädal {week}',
-      eventRefreshStaleWarning: 'Kalendriandmeid ei saanud värskendada alates {time}'
+      eventRefreshStaleWarning: 'Kalendriandmeid ei saanud värskendada alates {time}',
+      countdown: 'Loendur',
+      countdownToday: 'Täna',
+      countdownTomorrow: 'Homme',
+      countdownDays: '{count} päeva'
     }
   },
 
@@ -899,7 +923,11 @@ export const TRANSLATIONS = {
       eventTitleWithStartTime: '{title}, {time}',
       monthWeekPrefix: 'Set.',
       monthWeekAriaLabel: 'Setmana {week}',
-      eventRefreshStaleWarning: 'No es poden actualitzar les dades del calendari des de {time}'
+      eventRefreshStaleWarning: 'No es poden actualitzar les dades del calendari des de {time}',
+      countdown: 'Compte enrere',
+      countdownToday: 'Avui',
+      countdownTomorrow: 'Demà',
+      countdownDays: '{count} dies'
     }
   },
 
@@ -1027,7 +1055,11 @@ export const TRANSLATIONS = {
       eventTitleWithStartTime: '{title}, {time}',
       monthWeekPrefix: 'Uge',
       monthWeekAriaLabel: 'Uge {week}',
-      eventRefreshStaleWarning: 'Kan ikke opdatere kalenderdata siden {time}'
+      eventRefreshStaleWarning: 'Kan ikke opdatere kalenderdata siden {time}',
+      countdown: 'Nedtælling',
+      countdownToday: 'I dag',
+      countdownTomorrow: 'I morgen',
+      countdownDays: '{count} dage'
     }
   },
 
@@ -1155,7 +1187,11 @@ export const TRANSLATIONS = {
       eventTitleWithStartTime: '{title}, {time}',
       monthWeekPrefix: 'v.',
       monthWeekAriaLabel: 'Vecka {week}',
-      eventRefreshStaleWarning: 'Det går inte att uppdatera kalenderdata sedan {time}'
+      eventRefreshStaleWarning: 'Det går inte att uppdatera kalenderdata sedan {time}',
+      countdown: 'Nedräkning',
+      countdownToday: 'Idag',
+      countdownTomorrow: 'Imorgon',
+      countdownDays: '{count} dagar'
     }
   }
 };

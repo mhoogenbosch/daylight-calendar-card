@@ -208,7 +208,21 @@ import {
 } from './renderers/calendar-badge-renderer.js';
 import { renderCreateEventForm, renderEditEventForm } from './renderers/event-form-renderer.js';
 import {
+  applyCountdownMarker,
+  formatCountdownLabel,
+  getCountdownDays,
+  getCountdownFetchRange,
+  getCountdownBarItems,
+  hasCountdownMarker,
+  isCountdownEvent,
+  normalizeCountdownConfig,
+  renderColoredHourglassSvg,
+  selectCountdownEvents,
+  stripCountdownMarker
+} from './countdown/countdown.js';
+import {
   renderCompactHeader as renderCompactHeaderMarkup,
+  renderCountdownBar as renderCountdownBarMarkup,
   renderDashboardNavButton as renderDashboardNavButtonMarkup,
   renderHeaderTitle as renderHeaderTitleMarkup,
   renderPeriodNavigationButtons as renderPeriodNavigationButtonsMarkup,
@@ -396,6 +410,10 @@ class SkylightCalendarCard extends HTMLElement {
     this._lastSuccessfulEventRefresh = null;
     this._lastEventRefreshFailed = false;
     this._calendarEventMetadata = {};
+    this._countdownEntries = [];
+    this._countdownLastFetch = 0;
+    this._countdownFetching = false;
+    this._countdownFetchedEvents = [];
     this._currentDate = new Date();
     this._viewMode = DEFAULT_VIEW; // 'month', 'week-compact', 'week-standard', or 'agenda'
     this._weekStart = new Date();
@@ -1038,6 +1056,7 @@ class SkylightCalendarCard extends HTMLElement {
       throw new Error('You need to define calendar entities');
     }
     const language = resolveLanguage(config.language || this._hass?.language || this._hass?.locale?.language);
+    this._countdownLastFetch = 0;
     this._hasCustomTitle = config.title !== undefined && config.title !== null;
     this._config = this.normalizeConfig(config, language);
     this._viewMode = this._config.default_view;
@@ -2107,6 +2126,8 @@ class SkylightCalendarCard extends HTMLElement {
     this.recomputeLastSuccessfulEventRefresh();
     this.recomputeEventRefreshFailure();
     this.scheduleEventRefreshWarningTimer();
+    // Deferred so the current apply/render cycle finishes before countdown entries are recomputed.
+    Promise.resolve().then(() => this.refreshCountdownEvents());
   }
 
   applyEventsByCalendar(eventsByCalendar = {}, { startDate, endDate, lastSuccessfulRefresh = null, successfulEntityIds = null, failedEntityIds = [], source = 'network', requestId = null, coverageMode = 'replace', perCalendarMetadata = {} } = {}) {
@@ -3732,6 +3753,7 @@ class SkylightCalendarCard extends HTMLElement {
 
       <div class="calendar-container ${this._isDarkMode ? 'dark-mode' : ''} ${hasCustomBackground ? 'custom-background' : ''} ${this._config.hide_year ? 'hide-year' : ''} ${this._config.agenda_compact_events ? 'agenda-compact-events' : ''}" style="${containerStyle}">
         ${this._config.hide_header ? '' : (this._config.compact_header ? this.renderCompactHeader() : this.renderStandardHeader())}
+        ${this.renderCountdownBar()}
         ${this.renderEventRefreshWarning()}
         <div class="calendar-body">
           ${this.renderCalendarView()}
@@ -3853,6 +3875,15 @@ class SkylightCalendarCard extends HTMLElement {
       headerWeather,
       weekNumberLabel,
       headerItems,
+      helpers: this.getHeaderRenderHelpers()
+    });
+  }
+
+  renderCountdownBar() {
+    return renderCountdownBarMarkup({
+      items: getCountdownBarItems(this._countdownEntries, (key, params) => this.t(key, params), {
+        iconHtml: this._config?.weather_icon_style === 'colored' ? renderColoredHourglassSvg() : ''
+      }),
       helpers: this.getHeaderRenderHelpers()
     });
   }
@@ -5737,6 +5768,15 @@ class SkylightCalendarCard extends HTMLElement {
       });
     });
 
+    // Countdown chips open the event they count down to
+    this._root.querySelectorAll('.countdown-chip').forEach((chip) => {
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const entry = this._countdownEntries[Number(chip.dataset.countdownIndex)];
+        if (entry) this.showEventModal(entry.event);
+      });
+    });
+
     // Add event button
     addEventButton?.addEventListener('click', () => {
       this.showCreateEventModal();
@@ -6503,6 +6543,7 @@ class SkylightCalendarCard extends HTMLElement {
       recurrenceData,
       isPrefilledRecurring,
       isPrefilledAllDay,
+      ...this.getCountdownFormOptions(prefill?.description),
       recurrenceEndMode: this.getRecurrenceEndMode(recurrenceData),
       recurrenceWeekdayOptions: this.getRecurrenceWeekdayOptions(),
       eventTimeStep: this.getEventTimeStep(),
@@ -6581,7 +6622,7 @@ class SkylightCalendarCard extends HTMLElement {
       const title = this.getRootElementById('event-title').value.trim();
       const isAllDay = this.getRootElementById('event-all-day').checked;
       const location = this.getRootElementById('event-location').value.trim();
-      const description = this.getRootElementById('event-description').value.trim();
+      const description = this.applyCountdownToggle(this.getRootElementById('event-description').value.trim());
 
       if (selectedCalendarIds.length === 0) {
         this.showFormError(errorDiv, this.t('noWritableCalendars'));
@@ -6655,6 +6696,7 @@ class SkylightCalendarCard extends HTMLElement {
 
         // Refresh events
         this._lastFetch = null;
+        this._countdownLastFetch = 0;
         await this.updateEvents({ preserveScroll: this._viewMode === 'agenda' });
         this.safeReturnToList(options?.onSaved);
       } catch (error) {
@@ -6695,8 +6737,12 @@ class SkylightCalendarCard extends HTMLElement {
     const isSingleOccurrenceEdit = editScope === 'this' && isRecurring;
     const recurringSelectedByDefault = isRecurring && !isSingleOccurrenceEdit;
 
+    const countdownFormOptions = this.getCountdownFormOptions(event.description);
     content.innerHTML = renderEditEventForm({
-      event,
+      event: countdownFormOptions.showCountdownToggle
+        ? { ...event, description: stripCountdownMarker(event.description, this.getCountdownConfig().marker) }
+        : event,
+      ...countdownFormOptions,
       startDate,
       endDate,
       isAllDay,
@@ -6781,7 +6827,7 @@ class SkylightCalendarCard extends HTMLElement {
       const title = this.getRootElementById('event-title').value.trim();
       const isAllDayChecked = this.getRootElementById('event-all-day').checked;
       const location = this.getRootElementById('event-location').value.trim();
-      const description = this.getRootElementById('event-description').value.trim();
+      const description = this.applyCountdownToggle(this.getRootElementById('event-description').value.trim());
 
       const formResult = normalizeEventFormData({
         title,
@@ -6860,6 +6906,7 @@ class SkylightCalendarCard extends HTMLElement {
 
         // Refresh events
         this._lastFetch = null;
+        this._countdownLastFetch = 0;
         await this.updateEvents({ preserveScroll: this._viewMode === 'agenda' });
         this.safeReturnToList(onSaved);
       } catch (error) {
@@ -6873,7 +6920,8 @@ class SkylightCalendarCard extends HTMLElement {
             await this.deleteEvent(event.entityId, event.uid, event.recurrence_id);
             modal.classList.remove('show');
             this._lastFetch = null;
-            await this.updateEvents({ preserveScroll: this._viewMode === 'agenda' });
+            this._countdownLastFetch = 0;
+        await this.updateEvents({ preserveScroll: this._viewMode === 'agenda' });
             this.safeReturnToList(onSaved);
             return;
           } catch (fallbackError) {
@@ -7439,6 +7487,7 @@ class SkylightCalendarCard extends HTMLElement {
 
         // Refresh events
         this._lastFetch = null;
+        this._countdownLastFetch = 0;
         await this.updateEvents({ preserveScroll: this._viewMode === 'agenda' });
         this.safeReturnToList(onSaved);
       } catch (error) {
@@ -7566,8 +7615,10 @@ class SkylightCalendarCard extends HTMLElement {
     const canDelete = canModify; // WebSocket delete works for all calendars including Google
     const canForward = this.canCreateEvents();
 
+    const countdownModal = this.getCountdownModalData(event, startDate);
     content.innerHTML = renderEventDetailsModal({
-      event,
+      event: countdownModal.event,
+      countdownLabel: countdownModal.label,
       startDate,
       endDate,
       isAllDay,
@@ -7985,6 +8036,96 @@ class SkylightCalendarCard extends HTMLElement {
     if (!weatherData || this._config?.weather_icon_style !== 'colored') return weatherData;
     const nightTime = this._hass?.states?.['sun.sun']?.state === 'below_horizon';
     return { ...weatherData, iconHtml: renderColoredWeatherSvg(weatherData.condition, { nightTime }) };
+  }
+
+  getCountdownFormOptions(description) {
+    const countdownConfig = this.getCountdownConfig();
+    if (!countdownConfig?.show_toggle) return { showCountdownToggle: false, isCountdown: false };
+    return { showCountdownToggle: true, isCountdown: hasCountdownMarker(description, countdownConfig.marker) };
+  }
+
+  applyCountdownToggle(description) {
+    const countdownConfig = this.getCountdownConfig();
+    const toggle = this.getRootElementById('event-countdown');
+    if (!countdownConfig || !toggle) return description;
+    return applyCountdownMarker(description, countdownConfig.marker, toggle.checked);
+  }
+
+  getCountdownModalData(event, startDate) {
+    const countdownConfig = this.getCountdownConfig();
+    if (!countdownConfig || !isCountdownEvent(event, countdownConfig)) return { event, label: '' };
+    const days = getCountdownDays(startDate);
+    return {
+      event: { ...event, description: stripCountdownMarker(event.description, countdownConfig.marker) },
+      label: days >= 0 ? formatCountdownLabel(days, (key, params) => this.t(key, params)) : ''
+    };
+  }
+
+  getCountdownConfig() {
+    return normalizeCountdownConfig(this._config?.countdown);
+  }
+
+  // Countdowns look further ahead than the visible range. Already loaded events are used
+  // immediately; the rest is fetched gently: one calendar and one 30-day chunk at a time with
+  // a pause, because parallel long-range fetches stall CalDAV-backed Home Assistant instances.
+  // The network part is throttled to once per hour; create/update/delete resets it.
+  getCountdownEntityIds(countdownConfig = this.getCountdownConfig()) {
+    if (!countdownConfig) return [];
+    return Array.from(new Set([...this.getWritableCalendars(), ...countdownConfig.calendars]));
+  }
+
+  updateCountdownEntries(countdownConfig = this.getCountdownConfig()) {
+    const eventsByKey = new Map();
+    [...(this._countdownFetchedEvents || []), ...(this._events || [])].forEach((event) => {
+      eventsByKey.set(this.getEventIdentityKey(event.entityId, event), event);
+    });
+    const nextEntries = selectCountdownEvents(Array.from(eventsByKey.values()), countdownConfig, {
+      getEventStartDate: (event) => this.getEventStartDate(event)
+    });
+    const signature = (entries) => entries.map(({ event, days }) => `${event.entityId}|${event.summary}|${days}`).join('\n');
+    const changed = signature(nextEntries) !== signature(this._countdownEntries);
+    this._countdownEntries = nextEntries;
+    if (changed) this.renderAfterEventDataChange();
+  }
+
+  async refreshCountdownEvents({ force = false } = {}) {
+    const countdownConfig = this.getCountdownConfig();
+    if (!countdownConfig) {
+      this._countdownFetchedEvents = [];
+      if (this._countdownEntries.length) {
+        this._countdownEntries = [];
+        this.renderAfterEventDataChange();
+      }
+      return;
+    }
+    this.updateCountdownEntries(countdownConfig);
+    if (!this._hass || this._countdownFetching) return;
+    if (!force && Date.now() - this._countdownLastFetch < 60 * 60 * 1000) return;
+
+    this._countdownFetching = true;
+    this._countdownLastFetch = Date.now();
+    try {
+      const fetchRange = getCountdownFetchRange(countdownConfig, new Date(), this._loadedEventRange);
+      const chunks = fetchRange ? this.getDateRangeChunks(fetchRange.startDate, fetchRange.endDate, 30) : [];
+      const fetchedEvents = [];
+      const entityIds = this.getCountdownEntityIds(countdownConfig);
+      for (const [index, entityId] of entityIds.entries()) {
+        const color = this.getCalendarColor(entityId, index);
+        for (const chunk of chunks) {
+          const result = await this.fetchEventsForChunk(entityId, chunk);
+          if (result?.success) {
+            result.events.forEach((event) => fetchedEvents.push(normalizeCalendarEvent(event, { entityId, color })));
+          }
+          await new Promise((resolve) => setTimeout(resolve, 400));
+        }
+      }
+      this._countdownFetchedEvents = fetchedEvents;
+      this.updateCountdownEntries(countdownConfig);
+    } catch (error) {
+      console.warn('Daylight Calendar Card: countdown refresh failed', error);
+    } finally {
+      this._countdownFetching = false;
+    }
   }
 
   resolveHeaderItems() {
