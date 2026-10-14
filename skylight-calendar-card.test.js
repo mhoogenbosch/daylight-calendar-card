@@ -7203,16 +7203,14 @@ for (const calendarType of [
 
       await card.updateEvent(originalEvent, calendarType.id, eventData, 'future');
 
+      assert.equal(calls.length, 0);
+      assert.equal(sent.length, 1);
+      assert.equal(sent[0].type, 'calendar/event/update');
+      assert.equal(sent[0].entity_id, calendarType.id);
+      assert.equal(sent[0].uid, 'uid-1');
       if (recurrence.rrule) {
-        assert.equal(sent.length, 1);
-        assert.equal(sent[0].type, 'calendar/event/update');
-        assert.equal(sent[0].entity_id, calendarType.id);
         assert.equal(sent[0].event.rrule, recurrence.rrule);
         assert.equal(sent[0].recurrence_range, 'THISANDFUTURE');
-      } else {
-        assert.equal(calls.length, 1);
-        assert.equal(calls[0][1], 'update_event');
-        assert.equal(calls[0][2].entity_id, calendarType.id);
       }
     });
 
@@ -7247,6 +7245,78 @@ for (const calendarType of [
     });
   }
 }
+
+const makeUpdateEventCard = ({ wsFails = false, updateService } = {}) => {
+  const card = makeCard();
+  const sent = [];
+  const calls = [];
+  card._calendarCapabilities['calendar.caldav_work'] = { canUpdate: true };
+  card._hass = {
+    connection: {
+      sendMessagePromise: async (payload) => {
+        sent.push(payload);
+        if (wsFails && payload.type === 'calendar/event/update') {
+          throw new Error('ws update failed');
+        }
+      }
+    },
+    services: { calendar: updateService ? { update_event: updateService } : {} },
+    callService: async (...args) => calls.push(args)
+  };
+  return { card, sent, calls };
+};
+
+const singleEventUpdate = {
+  originalEvent: { entityId: 'calendar.caldav_work', uid: 'uid-1' },
+  eventData: {
+    summary: 'Updated',
+    start: { dateTime: '2026-05-01T15:00:00Z' },
+    end: { dateTime: '2026-05-01T16:00:00Z' }
+  }
+};
+
+const withSilencedConsole = async (fn) => {
+  const originalError = console.error;
+  const originalLog = console.log;
+  console.error = () => {};
+  console.log = () => {};
+  try {
+    await fn();
+  } finally {
+    console.error = originalError;
+    console.log = originalLog;
+  }
+};
+
+test('updateEvent ignores a Spook-style calendar.update_event service', async () => {
+  const { card, sent, calls } = makeUpdateEventCard({
+    wsFails: true,
+    updateService: { fields: { summary: {}, uid: {}, new_summary: {}, new_start: {}, new_end: {} } }
+  });
+
+  await withSilencedConsole(() => card.updateEvent(
+    singleEventUpdate.originalEvent, 'calendar.caldav_work', singleEventUpdate.eventData
+  ));
+
+  assert.equal(calls.some((call) => call[1] === 'update_event'), false);
+  assert.equal(calls.some((call) => call[1] === 'create_event'), true);
+  assert.equal(sent.some((payload) => payload.type === 'calendar/event/delete'), true);
+});
+
+test('updateEvent falls back to a compatible update_event service when WebSocket update fails', async () => {
+  const { card, calls } = makeUpdateEventCard({
+    wsFails: true,
+    updateService: { fields: { uid: {}, summary: {}, start_date_time: {}, end_date_time: {} } }
+  });
+
+  await withSilencedConsole(() => card.updateEvent(
+    singleEventUpdate.originalEvent, 'calendar.caldav_work', singleEventUpdate.eventData
+  ));
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1], 'update_event');
+  assert.equal(calls[0][2].uid, 'uid-1');
+});
 
 test('calendar colors prefer configured values before default palette', () => {
   const card = makeCard({

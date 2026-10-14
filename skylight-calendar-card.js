@@ -18049,19 +18049,26 @@ class SkylightCalendarCard extends HTMLElement {
 
     const { isRecurringUpdate, recurrenceId, recurrenceRange } = getRecurringUpdateControls(originalEvent, eventData, editScope);
 
-    if (isRecurringUpdate && !movingCalendar && this._hass.connection?.sendMessagePromise) {
+    // Prefer the Calendar WebSocket API (the one the HA calendar panel uses) for every in-place
+    // edit on a calendar that supports UPDATE_EVENT. It keeps the event UID and does not depend
+    // on whichever integration happens to own the calendar.update_event service name.
+    const useWebSocketUpdate = (isRecurringUpdate || capabilities.canUpdate) && !movingCalendar;
+    if (useWebSocketUpdate && this._hass.connection?.sendMessagePromise) {
       const wsPayload = buildUpdateEventWebSocketPayload(originalEvent, eventData, recurrenceId, recurrenceRange);
 
       try {
         await this._hass.connection.sendMessagePromise(wsPayload);
         return;
       } catch (error) {
-        console.error('Recurring update via WebSocket failed, falling back:', error?.message || error);
+        console.error('Update via WebSocket failed, falling back:', error?.message || error);
       }
     }
 
-    // If calendar supports UPDATE, we're not moving calendars, and service exists, use update service
-    const hasUpdateService = !!this._hass.services?.calendar?.update_event;
+    // If calendar supports UPDATE, we're not moving calendars, and a compatible service exists, use it.
+    // Spook (5.11+) registers its own calendar.update_event with a different schema
+    // (new_summary/new_start/new_end/shift); calling it with this card's payload always fails.
+    const updateService = this._hass.services?.calendar?.update_event;
+    const hasUpdateService = !!updateService && !updateService.fields?.new_summary;
     if (capabilities.canUpdate && !movingCalendar && hasUpdateService) {
       try {
         const serviceData = buildUpdateEventServiceData(originalEvent, eventData, recurrenceId, recurrenceRange);
