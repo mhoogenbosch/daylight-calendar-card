@@ -132,3 +132,26 @@ export const buildDeleteEventWebSocketPayload = (calendarId, uid, recurrenceId =
   type: 'calendar/event/delete',
   ...buildDeleteEventPayload(calendarId, uid, recurrenceId, recurrenceRange)
 });
+
+// Home Assistant error codes that mean the request was rejected before the calendar changed
+// anything, so replacing the event with create+delete cannot duplicate it or lose its UID.
+// Anything else (connection lost, timeout, an integration error) leaves the outcome unknown.
+const DEFINITIVE_REJECTION_CODES = new Set([
+  'unknown_command',
+  'not_supported',
+  'not_found',
+  'invalid_format',
+  'service_validation_error'
+]);
+
+export const isDefinitiveUpdateRejection = (error) => DEFINITIVE_REJECTION_CODES.has(error?.code);
+
+// A calendar.update_event service is only usable when it declares every field the card sends.
+// Integrations such as Spook register the same service name with a different schema.
+export const isCompatibleUpdateEventService = (service, serviceData) => {
+  const fields = service?.fields;
+  if (!fields || typeof fields !== 'object') {
+    return false;
+  }
+  return Object.keys(serviceData).every((key) => key === 'entity_id' || key in fields);
+};

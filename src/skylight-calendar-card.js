@@ -132,7 +132,9 @@ import {
   buildEventServiceData,
   buildUpdateEventServiceData,
   buildUpdateEventWebSocketPayload,
-  getRecurringUpdateControls
+  getRecurringUpdateControls,
+  isCompatibleUpdateEventService,
+  isDefinitiveUpdateRejection
 } from './events/event-service.js';
 import {
   getDisplayLocation as getDisplayLocationHelper,
@@ -6865,6 +6867,13 @@ class SkylightCalendarCard extends HTMLElement {
       } catch (error) {
         console.error('Failed to update event:', error);
 
+        // The calendar may hold the edit already; reload it so the user sees what was saved.
+        if (error.updateNotConfirmed) {
+          this._lastFetch = null;
+          this.updateEvents({ preserveScroll: this._viewMode === 'agenda' })
+            .catch((refreshError) => console.error('Failed to refresh after unconfirmed update:', refreshError));
+        }
+
         // Safety net: if edit was blocked by capability detection, still try create+delete.
         // Some integrations misreport update/delete support even though create+delete works.
         if (error.message === this.t('calendarNoModifyError')) {
@@ -6922,23 +6931,27 @@ class SkylightCalendarCard extends HTMLElement {
         await this._hass.connection.sendMessagePromise(wsPayload);
         return;
       } catch (error) {
-        console.error('Update via WebSocket failed, falling back:', error?.message || error);
+        if (!isDefinitiveUpdateRejection(error)) {
+          throw this.createUpdateNotConfirmedError('WebSocket', error);
+        }
+        console.error('Update via WebSocket rejected, falling back:', error?.message || error);
       }
     }
 
     // If calendar supports UPDATE, we're not moving calendars, and a compatible service exists, use it.
     // Spook (5.11+) registers its own calendar.update_event with a different schema
-    // (new_summary/new_start/new_end/shift); calling it with this card's payload always fails.
-    const updateService = this._hass.services?.calendar?.update_event;
-    const hasUpdateService = !!updateService && !updateService.fields?.new_summary;
+    // (new_summary/new_start/new_end/shift), so the service must declare every field we send.
+    const serviceData = buildUpdateEventServiceData(originalEvent, eventData, recurrenceId, recurrenceRange);
+    const hasUpdateService = isCompatibleUpdateEventService(this._hass.services?.calendar?.update_event, serviceData);
     if (capabilities.canUpdate && !movingCalendar && hasUpdateService) {
       try {
-        const serviceData = buildUpdateEventServiceData(originalEvent, eventData, recurrenceId, recurrenceRange);
-
         await this._hass.callService('calendar', 'update_event', serviceData);
         return;
       } catch (error) {
-        console.error('Update service failed, trying create+delete fallback:', error.message);
+        if (!isDefinitiveUpdateRejection(error)) {
+          throw this.createUpdateNotConfirmedError('Update service', error);
+        }
+        console.error('Update service rejected, trying create+delete fallback:', error?.message || error);
         // Fall through to create+delete pattern
       }
     } else if (capabilities.canUpdate && !movingCalendar && !hasUpdateService) {
@@ -6960,6 +6973,15 @@ class SkylightCalendarCard extends HTMLElement {
       console.error('Create+Delete fallback failed:', error);
       throw new Error(error.message || this.t('updateEventServiceError'));
     }
+  }
+
+  // The update may already be applied when its result is lost, so never replace the event then.
+  createUpdateNotConfirmedError(source, cause) {
+    console.error(`${source} update not confirmed, skipping create+delete fallback:`, cause?.message || cause);
+    const error = new Error(this.t('updateEventNotConfirmed'));
+    error.updateNotConfirmed = true;
+    error.cause = cause;
+    return error;
   }
 
   async deleteEvent(calendarId, uid, recurrenceId = null, recurrenceRange = null) {
