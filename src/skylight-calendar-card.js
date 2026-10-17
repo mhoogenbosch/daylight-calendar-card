@@ -6939,8 +6939,8 @@ class SkylightCalendarCard extends HTMLElement {
     }
 
     // If calendar supports UPDATE, we're not moving calendars, and a compatible service exists, use it.
-    // Spook (5.11+) registers its own calendar.update_event with a different schema
-    // (new_summary/new_start/new_end/shift), so the service must declare every field we send.
+    // Spook (5.11+) registers its own calendar.update_event with a lookup-style schema
+    // (new_summary/new_start/new_end/shift), so the service must declare the card's full schema.
     const serviceData = buildUpdateEventServiceData(originalEvent, eventData, recurrenceId, recurrenceRange);
     const hasUpdateService = isCompatibleUpdateEventService(this._hass.services?.calendar?.update_event, serviceData);
     if (capabilities.canUpdate && !movingCalendar && hasUpdateService) {

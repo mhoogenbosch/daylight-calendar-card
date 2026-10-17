@@ -9316,25 +9316,48 @@ const buildDeleteEventWebSocketPayload = (calendarId, uid, recurrenceId = null, 
 
 // Home Assistant error codes that mean the request was rejected before the calendar changed
 // anything, so replacing the event with create+delete cannot duplicate it or lose its UID.
-// Anything else (connection lost, timeout, an integration error) leaves the outcome unknown.
+// Anything else (connection lost, timeout, "failed" from the integration) leaves the outcome unknown.
 const DEFINITIVE_REJECTION_CODES = new Set([
   'unknown_command',
   'not_supported',
   'not_found',
+  'unauthorized',
   'invalid_format',
   'service_validation_error'
 ]);
 
 const isDefinitiveUpdateRejection = (error) => DEFINITIVE_REJECTION_CODES.has(error?.code);
 
-// A calendar.update_event service is only usable when it declares every field the card sends.
-// Integrations such as Spook register the same service name with a different schema.
-const isCompatibleUpdateEventService = (service, serviceData) => {
-  const fields = service?.fields;
+// Every field buildUpdateEventServiceData can send for a plain event. The card picks the date or
+// date-time pair per event, so a usable service has to accept both pairs, not just the one in
+// the current payload. Spook's calendar.update_event shares uid/summary/start_date_time/
+// end_date_time but uses them as lookup filters and has no date-only pair, so it is excluded.
+const UPDATE_EVENT_SERVICE_FIELDS = ['uid', 'summary', 'start_date_time', 'end_date_time', 'start_date', 'end_date'];
+
+const collectServiceFieldNames = (fields, names = new Set()) => {
   if (!fields || typeof fields !== 'object') {
+    return names;
+  }
+  for (const [name, field] of Object.entries(fields)) {
+    // Collapsible sections in services.yaml nest their own fields one level deeper.
+    if (field && typeof field === 'object' && field.fields && typeof field.fields === 'object') {
+      collectServiceFieldNames(field.fields, names);
+    } else {
+      names.add(name);
+    }
+  }
+  return names;
+};
+
+// A calendar.update_event service is only usable when it declares every field the card sends.
+const isCompatibleUpdateEventService = (service, serviceData) => {
+  const names = collectServiceFieldNames(service?.fields);
+  if (names.size === 0) {
     return false;
   }
-  return Object.keys(serviceData).every((key) => key === 'entity_id' || key in fields);
+  const required = new Set([...UPDATE_EVENT_SERVICE_FIELDS, ...Object.keys(serviceData)]);
+  required.delete('entity_id');
+  return [...required].every((key) => names.has(key));
 };
 
 function getVisibleCalendarBadgesForEvent(event, { hiddenCalendars = new Set(), getVirtualBadgeForEvent, normalizeSingleColor, configColors = {} } = {}) {
@@ -18107,8 +18130,8 @@ class SkylightCalendarCard extends HTMLElement {
     }
 
     // If calendar supports UPDATE, we're not moving calendars, and a compatible service exists, use it.
-    // Spook (5.11+) registers its own calendar.update_event with a different schema
-    // (new_summary/new_start/new_end/shift), so the service must declare every field we send.
+    // Spook (5.11+) registers its own calendar.update_event with a lookup-style schema
+    // (new_summary/new_start/new_end/shift), so the service must declare the card's full schema.
     const serviceData = buildUpdateEventServiceData(originalEvent, eventData, recurrenceId, recurrenceRange);
     const hasUpdateService = isCompatibleUpdateEventService(this._hass.services?.calendar?.update_event, serviceData);
     if (capabilities.canUpdate && !movingCalendar && hasUpdateService) {

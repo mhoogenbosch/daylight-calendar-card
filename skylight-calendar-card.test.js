@@ -7280,7 +7280,17 @@ const singleEventUpdate = {
   }
 };
 
-const compatibleUpdateService = { fields: { uid: {}, summary: {}, start_date_time: {}, end_date_time: {} } };
+const compatibleUpdateService = {
+  fields: { uid: {}, summary: {}, start_date_time: {}, end_date_time: {}, start_date: {}, end_date: {} }
+};
+
+// Spook's calendar.update_event (5.11+): the first four keys are lookup filters, the rest are changes.
+const spookUpdateService = {
+  fields: {
+    summary: {}, uid: {}, start_date_time: {}, end_date_time: {}, duration: {},
+    new_summary: {}, description: {}, location: {}, new_start: {}, new_end: {}, shift: {}
+  }
+};
 
 // Error shapes as rejected by home-assistant-js-websocket.
 const unknownCommandError = { code: 'unknown_command', message: 'Unknown command.' };
@@ -7311,10 +7321,7 @@ const wasReplaced = (calls, sent) => calls.some((call) => call[1] === 'create_ev
   || sent.some((payload) => payload.type === 'calendar/event/create' || payload.type === 'calendar/event/delete');
 
 test('updateEvent ignores a Spook-style calendar.update_event service', async () => {
-  const { card, sent, calls } = makeUpdateEventCard({
-    wsError: notSupportedError,
-    updateService: { fields: { summary: {}, uid: {}, new_summary: {}, new_start: {}, new_end: {} } }
-  });
+  const { card, sent, calls } = makeUpdateEventCard({ wsError: notSupportedError, updateService: spookUpdateService });
 
   await runSingleEventUpdate(card);
 
@@ -7326,7 +7333,7 @@ test('updateEvent ignores a Spook-style calendar.update_event service', async ()
 test('updateEvent ignores a calendar.update_event service that lacks a field the card sends', async () => {
   const { card, calls } = makeUpdateEventCard({
     wsError: unknownCommandError,
-    updateService: { fields: { uid: {}, summary: {} } }
+    updateService: { fields: { uid: {}, summary: {}, start_date_time: {}, end_date_time: {} } }
   });
 
   await runSingleEventUpdate(card);
@@ -7341,6 +7348,34 @@ test('updateEvent ignores a calendar.update_event service without field metadata
   await runSingleEventUpdate(card);
 
   assert.equal(calls.some((call) => call[1] === 'update_event'), false);
+});
+
+test('updateEvent accepts a compatible update_event service whose fields sit in collapsible sections', async () => {
+  const { card, calls } = makeUpdateEventCard({
+    wsError: unknownCommandError,
+    updateService: {
+      fields: {
+        uid: {}, summary: {},
+        timing: { collapsed: true, fields: { start_date_time: {}, end_date_time: {}, start_date: {}, end_date: {} } }
+      }
+    }
+  });
+
+  await runSingleEventUpdate(card);
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1], 'update_event');
+});
+
+test('updateEvent requires the update_event service to declare fields only present in this payload', async () => {
+  const { card, calls } = makeUpdateEventCard({ wsError: unknownCommandError, updateService: compatibleUpdateService });
+
+  await withSilencedConsole(() => card.updateEvent(
+    singleEventUpdate.originalEvent, 'calendar.caldav_work', { ...singleEventUpdate.eventData, location: 'Office' }
+  ));
+
+  assert.equal(calls.some((call) => call[1] === 'update_event'), false);
+  assert.equal(calls.some((call) => call[1] === 'create_event'), true);
 });
 
 for (const [label, wsError] of [['unknown command', unknownCommandError], ['unsupported update', notSupportedError]]) {
@@ -7376,8 +7411,9 @@ test('updateEvent falls back to create+delete when there is no WebSocket connect
 
 for (const [label, wsError] of [
   ['a lost connection', connectionLostError],
-  ['a timeout', new Error('Timeout waiting for response')],
-  ['an integration error', { code: 'home_assistant_error', message: 'CalDAV server returned 502' }]
+  ['a timeout', { code: 'timeout', message: 'Timeout' }],
+  ['a client-side error without a code', new Error('Timeout waiting for response')],
+  ['an integration error', { code: 'failed', message: 'CalDAV server returned 502' }]
 ]) {
   test(`updateEvent does not replace the event after ${label} on the WebSocket update`, async () => {
     const { card, calls, sent } = makeUpdateEventCard({ wsError, updateService: compatibleUpdateService });
